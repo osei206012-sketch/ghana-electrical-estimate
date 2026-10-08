@@ -36,9 +36,18 @@
   td input:focus { border-bottom-color:var(--gold); background:#FFF9E5; }
   td.amt { text-align:right; padding:0 8px; font-weight:600; font-variant-numeric:tabular-nums; white-space:nowrap; }
   .del { border:none; background:transparent; color:#9A3B3B; font-size:20px; cursor:pointer; padding:6px 8px; line-height:1; }
-  tfoot td { border-top:2px solid var(--ink); padding:16px 8px; font-weight:700; }
-  tfoot .label { text-align:right; font-size:16px; }
-  tfoot .total { text-align:right; font-size:20px; color:var(--green); white-space:nowrap; font-variant-numeric:tabular-nums; }
+  tfoot td { padding:10px 8px; font-weight:600; border-top:1px solid var(--line); }
+  tfoot .label { text-align:right; }
+  tfoot .val { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
+  tfoot tr.grand td { border-top:2px solid var(--ink); padding:16px 8px; font-weight:700; }
+  tfoot tr.grand .label { font-size:16px; }
+  tfoot tr.grand .val { font-size:20px; color:var(--green); }
+  .work-ctl { display:flex; gap:6px; justify-content:flex-end; }
+  .work-ctl select, .work-ctl input { font:inherit; color:var(--ink); border:1px solid var(--line); background:#fff;
+    border-radius:4px; padding:8px; }
+  .work-ctl select { width:auto; }
+  .work-ctl input { width:100px; text-align:right; }
+  .work-ctl select:focus, .work-ctl input:focus { outline:none; border-color:var(--ink); background:#FFF9E5; }
   .empty { padding:24px; text-align:center; color:#4B6072; }
   .actions { padding:16px 20px 24px; display:flex; gap:12px; flex-wrap:wrap; }
   button { font:inherit; cursor:pointer; border-radius:4px; }
@@ -78,7 +87,7 @@
   <header>
     <button class="btn dark small top-btn no-print" id="pdfTop">Download PDF</button>
     <h1>Electrical Works Estimate</h1>
-    <p>All amounts in Ghana cedis (GH₵). Amount = Quantity × Rate, less depreciation.</p>
+    <p>All amounts in Ghana cedis (GH₵). Amount = Quantity × Rate, less depreciation. Workmanship is added to the subtotal.</p>
   </header>
 
   <section class="meta">
@@ -103,8 +112,27 @@
       <tbody id="rows"></tbody>
       <tfoot>
         <tr>
+          <td colspan="5" class="label">Subtotal (items)</td>
+          <td class="val" id="subCell">GH₵ 0.00</td>
+          <td class="no-print"></td>
+        </tr>
+        <tr>
+          <td colspan="2" class="label">Workmanship</td>
+          <td colspan="3">
+            <div class="work-ctl">
+              <select id="workType" aria-label="Workmanship type">
+                <option value="pct">% of subtotal</option>
+                <option value="fixed">Fixed GH₵</option>
+              </select>
+              <input id="workVal" type="number" min="0" step="any" inputmode="decimal" value="30" aria-label="Workmanship value">
+            </div>
+          </td>
+          <td class="val" id="workCell">GH₵ 0.00</td>
+          <td class="no-print"></td>
+        </tr>
+        <tr class="grand">
           <td colspan="5" class="label">Total amount</td>
-          <td class="total" id="totalCell">GH₵ 0.00</td>
+          <td class="val" id="totalCell">GH₵ 0.00</td>
           <td class="no-print"></td>
         </tr>
       </tfoot>
@@ -137,7 +165,7 @@ const esc = (t) =>
     .replace(/\(/g, "\\(")
     .replace(/\)/g, "\\)");
 
-function makePdf({ project, client, date, rows, total }) {
+function makePdf({ project, client, date, rows, subtotal, workLabel, work, total }) {
   const W = 595, H = 842, M = 40;
   const INK = [0.07, 0.15, 0.23], GOLD = [0.88, 0.64, 0], GREEN = [0.04, 0.43, 0.25];
   const GREY = [0.42, 0.5, 0.56], LINE = [0.78, 0.83, 0.86];
@@ -190,7 +218,7 @@ function makePdf({ project, client, date, rows, total }) {
   newPage();
   rect(0, H - 10, W, 10, GOLD);
   T(M, H - 56, "Electrical Works Estimate", 20, { bold: true, color: INK });
-  T(M, H - 74, "All amounts in Ghana cedis (GHS). Amount = Quantity x Rate, less depreciation.", 9, { color: GREY });
+  T(M, H - 74, "All amounts in Ghana cedis (GHS). Amount = Quantity x Rate, less depreciation. Workmanship added to subtotal.", 9, { color: GREY });
   T(M, H - 100, "Project:", 10, { bold: true });
   T(M + 50, H - 100, project || "-", 10);
   T(M, H - 116, "Client:", 10, { bold: true });
@@ -219,13 +247,18 @@ function makePdf({ project, client, date, rows, total }) {
     hline(y, M, W - M, LINE, 0.6);
   });
 
-  if (y < 90) {
+  if (y < 140) {
     newPage();
     y = H - 50;
   }
-  hline(y - 4, M, W - M, INK, 1.5);
-  T(440, y - 28, "Total amount", 12, { bold: true, right: true });
-  T(W - M - 6, y - 28, "GHS " + fmt(total), 14, { bold: true, color: GREEN, right: true });
+  hline(y - 4, M, W - M, LINE, 0.6);
+  T(440, y - 22, "Subtotal (items)", 10, { right: true });
+  T(W - M - 6, y - 22, "GHS " + fmt(subtotal), 10, { right: true });
+  T(440, y - 40, workLabel, 10, { right: true });
+  T(W - M - 6, y - 40, "GHS " + fmt(work), 10, { right: true });
+  hline(y - 52, M, W - M, INK, 1.5);
+  T(440, y - 76, "Total amount", 12, { bold: true, right: true });
+  T(W - M - 6, y - 76, "GHS " + fmt(total), 14, { bold: true, color: GREEN, right: true });
 
   // footers
   pages.forEach((pg, i) => {
@@ -286,14 +319,29 @@ function amountOf(x) {
   const dep = Math.min(Math.max(Number(x.dep) || 0, 0), 100);
   return (Number(x.qty) || 0) * (Number(x.rate) || 0) * (1 - dep / 100);
 }
-function totalOf() {
+function subtotalOf() {
   return rows.reduce((s, x) => s + amountOf(x), 0);
 }
+function workOf() {
+  const v = Number($("workVal").value) || 0;
+  return $("workType").value === "pct" ? (subtotalOf() * v) / 100 : v;
+}
+function workLabel() {
+  const v = Number($("workVal").value) || 0;
+  return $("workType").value === "pct" ? "Workmanship (" + v + "% of subtotal)" : "Workmanship (fixed)";
+}
+function totalOf() {
+  return subtotalOf() + workOf();
+}
 function updateTotal() {
+  $("subCell").textContent = "GH₵ " + fmt(subtotalOf());
+  $("workCell").textContent = "GH₵ " + fmt(workOf());
   const t = "GH₵ " + fmt(totalOf());
   $("totalCell").textContent = t;
   $("barTotal").textContent = t;
 }
+$("workType").addEventListener("change", updateTotal);
+$("workVal").addEventListener("input", updateTotal);
 
 function cellInput(row, field, numeric, label, attrs) {
   const td = document.createElement("td");
@@ -382,6 +430,9 @@ function downloadPdf() {
       client: $("client").value,
       date: $("date").value,
       rows: rows.map((x) => ({ desc: x.desc, dep: x.dep, qty: x.qty, rate: x.rate, amount: amountOf(x) })),
+      subtotal: subtotalOf(),
+      workLabel: workLabel(),
+      work: workOf(),
       total: totalOf(),
     });
     const url = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
